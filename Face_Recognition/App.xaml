@@ -4,6 +4,28 @@
              xmlns:local="clr-namespace:Face_Recognition"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <Style x:Key="EyeStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Stroke" Value="LightGreen" />
+            <Setter Property="StrokeThickness" Value="4" />
+        </Style>
+        <Style x:Key="NoseStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Fill" Value="Red" />
+        </Style>
+        <Style x:Key="MouthStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Stroke" Value="Blue" />
+            <Setter Property="StrokeThickness" Value="4" />
+        </Style>
+        <Style x:Key="BoundingFaceStyle" TargetType="Rectangle">
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Stroke" Value="Green"/>
+            <Setter Property="StrokeThickness" Value="4"/>
+        </Style>
     </Application.Resources>
 </Application>
