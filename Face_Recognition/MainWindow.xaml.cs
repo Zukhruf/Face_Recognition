@@ -38,12 +38,19 @@ namespace Face_Recognition
         IList<Body> _bodies = null;
 
         // Frame wajah
-        FaceFrameSource _faceSource = null;
+        FaceFrameSource[] _faceSource = null;
 
         // Pembaca frame wajah
-        FaceFrameReader _faceReader = null;
+        FaceFrameReader[] _faceReader = null;
+
+        // Hasil
+        FaceFrameResult[] _faceResult = null;
+
+        private List<Brush> _faceBrush;
 
         private string statusText;
+
+        private int bodyCount;
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -52,12 +59,8 @@ namespace Face_Recognition
             InitializeComponent();
 
             // Inisialisasi Kinect 
-
+           
             _sensor = KinectSensor.GetDefault();
-            if (_sensor == null)
-            {
-                statusText = "Kinect Tidak Ada";
-            }
 
             if (_sensor != null)
             {
@@ -70,9 +73,16 @@ namespace Face_Recognition
                 _bodyReader = _sensor.BodyFrameSource.OpenReader();
                 _bodyReader.FrameArrived += BodyReader_FrameArrived;
 
+                this.bodyCount = _sensor.BodyFrameSource.BodyCount;
+
+                this._faceReader = new FaceFrameReader[this.bodyCount];
+                this._faceSource = new FaceFrameSource[this.bodyCount];
+                this._faceResult = new FaceFrameResult[this.bodyCount];
                 // Inisialisasi sumber wajah dengan fitur
 
-                _faceSource = new FaceFrameSource(_sensor, 0, FaceFrameFeatures.BoundingBoxInColorSpace
+                for (int i = 0; i < this.bodyCount; i++)
+                {
+                    _faceSource[i] = new FaceFrameSource(_sensor, 0, FaceFrameFeatures.BoundingBoxInColorSpace
                                                              | FaceFrameFeatures.FaceEngagement
                                                              | FaceFrameFeatures.Glasses
                                                              | FaceFrameFeatures.Happy
@@ -80,10 +90,32 @@ namespace Face_Recognition
                                                              | FaceFrameFeatures.MouthOpen
                                                              | FaceFrameFeatures.PointsInColorSpace
                                                              | FaceFrameFeatures.RightEyeClosed);
-                _faceReader = _faceSource.OpenReader();
-                _faceReader.FrameArrived += FaceReader_FrameArrived;
+                    _faceReader[i] = _faceSource[i].OpenReader();
+                    _faceReader[i].FrameArrived += FaceReader_FrameArrived;
+                }
+            }
 
-                FrameDescription frameDescription = _sensor.ColorFrameSource.FrameDescription;
+            this._faceBrush = new List<Brush>()
+                {
+                    Brushes.Blue,
+                    Brushes.Brown,
+                    Brushes.Green,
+                    Brushes.OrangeRed,
+                    Brushes.Black
+                };
+
+            this._sensor.IsAvailableChanged += this.Sensor_IsAvailableChanged;
+        }
+
+        public int Bodycount
+        {
+            set
+            {
+                this.bodyCount = _sensor.BodyFrameSource.BodyCount;
+            }
+            get
+            {
+                return this.bodyCount;
             }
         }
         //BodyReader Frame Arrived
@@ -95,18 +127,72 @@ namespace Face_Recognition
                 {
                     frame.GetAndRefreshBodyData(_bodies);
                     Body body = _bodies.Where(b => b.IsTracked).FirstOrDefault();
-
-                    if (!_faceSource.IsTrackingIdValid)
+           
+                    for (int i = 0; i < this.bodyCount; i++)
                     {
-                        if (body != null)
+                        if (_faceSource[i].IsTrackingIdValid)
                         {
-                            _faceSource.TrackingId = body.TrackingId;
+                            if (body != null)
+                            {
+                                _faceSource[i].TrackingId = body.TrackingId;
+                            }
                         }
                     }
                 }
             }
         }
+
+        //private void DrawFaceFrameResult(int faceIndex, FaceFrameResult faceResult, DrawingContext dc)
+        //{
+        //    Brush drawingBrush = this._faceBrush[0];
+        //    if (faceIndex < this.bodyCount)
+        //    {
+        //        drawingBrush = this._faceBrush[faceIndex];
+        //    }
+
+        //    Pen pen = new Pen(drawingBrush, 20);
+
+        //    var faceBoxSource = _faceResult.FaceBoundingBoxInColorSpace;
+        //    Rect faceBox = new Rect(faceBoxSource.Left, faceBoxSource.Top, faceBoxSource.Right - faceBoxSource.Left, faceBoxSource.Top - faceBoxSource.Bottom);
+        //    dc.DrawRectangle(null, pen, faceBox);
+
+        //    if (faceResult.FacePointsInColorSpace != null)
+        //    {
+        //        foreach (PointF point in faceResult.FacePointsInColorSpace.Values)
+        //        {
+        //            dc.DrawEllipse(null, pen, new Point(point.X, point.Y), 1.0, 1.0);
+        //        }
+        //    }
+
+        //    string faceText = string.Empty;
+        //    if (faceResult.FaceProperties != null)
+        //    {
+        //        foreach (var fp in faceResult.FaceProperties)
+        //        {
+        //            faceText += fp.Key.ToString() + " : ";
+
+        //            if (fp.Value == DetectionResult.Maybe)
+        //            {
+        //                faceText += DetectionResult.No + "\n";
+        //            }
+        //            else
+        //            {
+        //                faceText += fp.Key.ToString() + "\n";
+        //            }
+        //        }
+        //    }
+        //    dc.DrawText(new FormattedText(
+        //        faceText,
+        //        CultureInfo.GetCultureInfo("en-us"),
+        //        FlowDirection.LeftToRight,
+        //        new Typeface("Georgia"),
+        //        30, drawingBrush),
+        //        faceText);
+        //}
+
         // Color reader
+
+        // Color Frame
         void ColorReader_FrameArrived(object sender, ColorFrameArrivedEventArgs e)
         {
             using (var frame = e.FrameReference.AcquireFrame())
@@ -124,66 +210,68 @@ namespace Face_Recognition
             {
                 if (frame != null)
                 {
-                    // get face frame result
-                    FaceFrameResult result = frame.FaceFrameResult;
-
-                    if (result != null)
+                    for (int i = 0; i < this.bodyCount; i++)
                     {
-                        // Get face point, mapped in color space
-                        var mataKiri = result.FacePointsInColorSpace[FacePointType.EyeLeft];
-                        var mataKanan = result.FacePointsInColorSpace[FacePointType.EyeRight];
-                        var hidung = result.FacePointsInColorSpace[FacePointType.Nose];
-                        var mulutBagianKiri = result.FacePointsInColorSpace[FacePointType.MouthCornerLeft];
-                        var mulutBagianKanan = result.FacePointsInColorSpace[FacePointType.MouthCornerRight];
-
-                        // Get the characteristics
-                        var mataKiriTertutup = result.FaceProperties[FaceProperty.LeftEyeClosed];
-                        var mataKananTertutup = result.FaceProperties[FaceProperty.RightEyeClosed];
-                        var mulutTerbuka = result.FaceProperties[FaceProperty.MouthOpen];
-                        var senyum = result.FaceProperties[FaceProperty.Happy];
-                        var memakaiKacamata = result.FaceProperties[FaceProperty.WearingGlasses];
-
-                        // Position the canvas UI elements
-                        Canvas.SetLeft(ellipseMataKiri, mataKiri.X - ellipseMataKiri.Width / 2.0);
-                        Canvas.SetTop(ellipseMataKiri, mataKiri.Y - ellipseMataKiri.Height / 2.0);
-
-                        Canvas.SetLeft(ellipseMataKanan, mataKanan.X - ellipseMataKanan.Width / 2.0);
-                        Canvas.SetTop(ellipseMataKanan, mataKanan.Y - ellipseMataKanan.Height / 2.0);
-
-                        Canvas.SetLeft(ellipseHidung, hidung.X - ellipseHidung.Width / 2.0);
-                        Canvas.SetTop(ellipseHidung, hidung.Y - ellipseHidung.Height / 2.0);
-
-                        Canvas.SetLeft(ellipseMulut, ((mulutBagianKanan.X + mulutBagianKiri.X) / 2.0) - ellipseMulut.Width / 2.0);
-                        Canvas.SetTop(ellipseMulut, ((mulutBagianKanan.Y + mulutBagianKiri.Y) / 2.0) - ellipseMulut.Height / 2.0);
-                        ellipseMulut.Width = Math.Abs(mulutBagianKanan.X - mulutBagianKiri.X);
-
-
-                        // Display or hide the ellipses
-                        if (mataKiriTertutup == DetectionResult.Yes || mataKiriTertutup == DetectionResult.Maybe)
+                        this._faceResult[i] = frame.FaceFrameResult;
+                        // get face frame result
+                        if (_faceResult[i] != null)
                         {
-                            ellipseMataKiri.Visibility = Visibility.Collapsed;
-                        }
-                        else
-                        {
-                            ellipseMataKiri.Visibility = Visibility.Visible;
-                        }
+                            // Get face point, mapped in color space
+                            var mataKiri = _faceResult[i].FacePointsInColorSpace[FacePointType.EyeLeft];
+                            var mataKanan = _faceResult[i].FacePointsInColorSpace[FacePointType.EyeRight];
+                            var hidung = _faceResult[i].FacePointsInColorSpace[FacePointType.Nose];
+                            var mulutBagianKiri = _faceResult[i].FacePointsInColorSpace[FacePointType.MouthCornerLeft];
+                            var mulutBagianKanan = _faceResult[i].FacePointsInColorSpace[FacePointType.MouthCornerRight];
 
-                        if (mataKananTertutup == DetectionResult.Yes || mataKananTertutup == DetectionResult.Maybe)
-                        {
-                            ellipseMataKanan.Visibility = Visibility.Collapsed;
-                        }
-                        else
-                        {
-                            ellipseMataKanan.Visibility = Visibility.Visible;
-                        }
+                            // Get the characteristics
+                            var mataKiriTertutup = _faceResult[i].FaceProperties[FaceProperty.LeftEyeClosed];
+                            var mataKananTertutup = _faceResult[i].FaceProperties[FaceProperty.RightEyeClosed];
+                            var mulutTerbuka = _faceResult[i].FaceProperties[FaceProperty.MouthOpen];
+                            var senyum = _faceResult[i].FaceProperties[FaceProperty.Happy];
+                            var memakaiKacamata = _faceResult[i].FaceProperties[FaceProperty.WearingGlasses];
 
-                        if (mulutTerbuka == DetectionResult.Yes || mulutTerbuka == DetectionResult.Maybe)
-                        {
-                            ellipseMulut.Height = 50.0;
-                        }
-                        else
-                        {
-                            ellipseMulut.Height = 20.0;
+                            // Position the canvas UI elements
+                            Canvas.SetLeft(ellipseMataKiri, mataKiri.X - ellipseMataKiri.Width / 2.0);
+                            Canvas.SetTop(ellipseMataKiri, mataKiri.Y - ellipseMataKiri.Height / 2.0);
+
+                            Canvas.SetLeft(ellipseMataKanan, mataKanan.X - ellipseMataKanan.Width / 2.0);
+                            Canvas.SetTop(ellipseMataKanan, mataKanan.Y - ellipseMataKanan.Height / 2.0);
+
+                            Canvas.SetLeft(ellipseHidung, hidung.X - ellipseHidung.Width / 2.0);
+                            Canvas.SetTop(ellipseHidung, hidung.Y - ellipseHidung.Height / 2.0);
+
+                            Canvas.SetLeft(ellipseMulut, ((mulutBagianKanan.X + mulutBagianKiri.X) / 2.0) - ellipseMulut.Width / 2.0);
+                            Canvas.SetTop(ellipseMulut, ((mulutBagianKanan.Y + mulutBagianKiri.Y) / 2.0) - ellipseMulut.Height / 2.0);
+                            ellipseMulut.Width = Math.Abs(mulutBagianKanan.X - mulutBagianKiri.X);
+
+
+                            // Display or hide the ellipses
+                            if (mataKiriTertutup == DetectionResult.Yes || mataKiriTertutup == DetectionResult.Maybe)
+                            {
+                                ellipseMataKiri.Visibility = Visibility.Collapsed;
+                            }
+                            else
+                            {
+                                ellipseMataKiri.Visibility = Visibility.Visible;
+                            }
+
+                            if (mataKananTertutup == DetectionResult.Yes || mataKananTertutup == DetectionResult.Maybe)
+                            {
+                                ellipseMataKanan.Visibility = Visibility.Collapsed;
+                            }
+                            else
+                            {
+                                ellipseMataKanan.Visibility = Visibility.Visible;
+                            }
+
+                            if (mulutTerbuka == DetectionResult.Yes || mulutTerbuka == DetectionResult.Maybe)
+                            {
+                                ellipseMulut.Height = 50.0;
+                            }
+                            else
+                            {
+                                ellipseMulut.Height = 20.0;
+                            }
                         }
                     }
                 }
@@ -192,15 +280,18 @@ namespace Face_Recognition
         //Window Closing
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            if (_faceReader != null)
+            for (int i = 0; i < this.bodyCount; i++)
             {
-                _faceReader.Dispose();
-                _faceReader = null;
-            }
-            if (_faceSource != null)
-            {
-                _faceSource.Dispose();
-                _faceSource = null;
+                if (_faceReader[i] != null)
+                {
+                    _faceReader[i].Dispose();
+                    _faceReader[i] = null;
+                }
+                if (_faceSource[i] != null)
+                {
+                    _faceSource[i].Dispose();
+                    _faceSource[i] = null;
+                }
             }
             if (_bodyReader != null)
             {
@@ -233,13 +324,13 @@ namespace Face_Recognition
                 }
             }
         }
+
         private void Sensor_IsAvailableChanged(object sender, IsAvailableChangedEventArgs e)
         {
             if (_sensor != null)
             {
                 // on failure, set the status text
-                this.StatusText = _sensor.IsAvailable ? "Kinect is Connected"
-                                                                : "Kinect is Not Connected";
+                this.StatusText = _sensor.IsAvailable ? "Kinect is Connected" : "Kinect is Not Connected";
             }
         }
     }
